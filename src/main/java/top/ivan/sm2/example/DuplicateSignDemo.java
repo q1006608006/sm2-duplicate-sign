@@ -35,8 +35,8 @@ public class DuplicateSignDemo {
                 , (BCECPublicKey) kp1.getPublic()
         );
 
-        PublicKey validKey = digest1.takeValidKey();
-        assert validKey.equals(digest2.takeValidKey());
+        PublicKey validKey = digest1.takeVerifyKey();
+        assert validKey.equals(digest2.takeVerifyKey());
 
         DuplicateSignDigest.Session s1 = digest1.startSession();
         DuplicateSignDigest.Session s2 = digest2.startSession();

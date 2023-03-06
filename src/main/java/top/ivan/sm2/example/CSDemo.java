@@ -61,13 +61,40 @@ public class CSDemo {
         @Deprecated
         String register(BCECPublicKey key);
 
+        /**
+         * publish public-key
+         *
+         * @return
+         */
         BCECPublicKey getPublicKey();
 
+        /**
+         * apply before sign
+         *
+         * @param id     cli-id
+         * @param uid    random-id
+         * @param comMsg cli-info & sign-message
+         * @return apply info
+         */
         byte[] apply(String id, String uid, byte[] comMsg);
 
+        /**
+         * sign
+         *
+         * @param id     cli-id
+         * @param uid    random-id which generate in apply
+         * @param digits sign-info
+         * @return final sign
+         */
         byte[] sign(String id, String uid, byte[] digits);
 
-        BCECPublicKey duplicateVerifyKey(BCECPublicKey trd);
+        /**
+         * get the key for valid duplicate-sign
+         *
+         * @param trd client public-key
+         * @return key
+         */
+        BCECPublicKey getVerifyKey(BCECPublicKey trd);
 
     }
 
@@ -118,8 +145,8 @@ public class CSDemo {
         }
 
         @Override
-        public BCECPublicKey duplicateVerifyKey(BCECPublicKey trd) {
-            return new DuplicateSignDigest(privateKey, trd).takeValidKey();
+        public BCECPublicKey getVerifyKey(BCECPublicKey trd) {
+            return new DuplicateSignDigest(privateKey, trd).takeVerifyKey();
         }
 
         private static class Processor {
@@ -163,15 +190,39 @@ public class CSDemo {
     }
 
     public static void main(String[] args) {
-        DPServerRpc dpServer = new DPServerSpi(Sm2Utils.generate());
-        DPClient cli = new DPClient(Sm2Utils.generate(), dpServer);
+        /**
+         * 模拟协同签名（可信任中心或CA、签名发起方）双方在进行一次协同签名的工作流程
+         *
+         * 1.可信任中心（以下简称srv）提供远程服务(RPC）
+         * 2.签名发起方（以下简称cli）使用srv提供的服务进行注册（该步骤仅为演示，实际
+         *  应用场景中建议调整为线下对接，避免公钥在线上传播，以及更利于服务管理）
+         * 3.签名，签名可拆分为以下步骤：
+         *  3.0 （前置步骤）签名双方生产安全随机数
+         *  3.1 cli发起签名申请，请求内容包含随机数构成信息及签名内容
+         *  3.2 srv收到签名申请，验证请求内容后，返回签名要素(r,s_)
+         *  3.3 cli收到(r,s_)，根据s_计算要素t
+         *  3.4 cli发起签名请求，内容为(r,t)
+         *  3.5 srv收到(r,t)，计算出签名(r,s)
+         * 4.验签，参考《SM2椭圆曲线公钥密码算法 - 第2部分:数字签名算法》第七章节流程即
+         *  可，其签名密钥可通过签名双方任意一方获得
+         */
 
-        BCECPublicKey validKey = dpServer.duplicateVerifyKey(cli.getPublicKey());
+        //srv public rpc
+        DPServerRpc srv = new DPServerSpi(Sm2Utils.generate());
+        //cli init & register
+        DPClient cli = new DPClient(Sm2Utils.generate(), srv);
 
+        //get verify key
+        BCECPublicKey validKey = srv.getVerifyKey(cli.getPublicKey());
+
+        //test message
         byte[] msg = "this is a test message".getBytes();
 
+        //do sign
         byte[] sign = cli.sign(msg);
+
         System.out.println("sign: " + Base64.getEncoder().encodeToString(sign));
+        //verify sign
         System.out.println("verify: " + Sm2Utils.verify(msg, sign, validKey.getEncoded()));
     }
 }

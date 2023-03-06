@@ -45,7 +45,7 @@ public class DuplicateSignDigest {
     }
 
 
-    public BCECPublicKey takeValidKey() {
+    public BCECPublicKey takeVerifyKey() {
         if (null == v) {
             ECPoint mp = ECAlgorithms.sumOfTwoMultiplies(this.b, d, g, BigInteger.valueOf(-1)).normalize();
             ECPublicKeySpec spec = new ECPublicKeySpec(mp, new ECParameterSpec(sm2p256v1.getCurve(), sm2p256v1.getG(), sm2p256v1.getN()));
@@ -119,7 +119,7 @@ public class DuplicateSignDigest {
 
         private BigInteger getR(ECPoint ra, ECPoint rb, byte[] message) {
             ECPoint R = ECAlgorithms.sumOfTwoMultiplies(ra, BigInteger.ONE, rb, BigInteger.ONE).normalize();
-            ECPoint C = takeValidKey().getQ();
+            ECPoint C = takeVerifyKey().getQ();
             SM3Digest digest = new SM3Digest();
             updateDigest(digest, getZ(C.getAffineXCoord().toBigInteger(), C.getAffineYCoord().toBigInteger()));
             updateDigest(digest, message);
