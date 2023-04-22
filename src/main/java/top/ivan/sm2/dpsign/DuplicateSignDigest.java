@@ -20,6 +20,7 @@ import java.math.BigInteger;
 import java.security.SecureRandom;
 
 public class DuplicateSignDigest {
+    private static final int BIG_INTEGER_PADDING = 32;
     private static final X9ECParameters sm2p256v1 = GMNamedCurves.getByName("sm2p256v1");
     private static final ECPoint g = sm2p256v1.getG();
     private static final BigInteger n = sm2p256v1.getN();
@@ -58,18 +59,18 @@ public class DuplicateSignDigest {
         return new Session(krand.nextK());
     }
 
-    public byte[] getZ(BigInteger Ax, BigInteger Ay) {
+    private byte[] getZ() {
         SM3Digest digest = new SM3Digest();
         int len = ID.length * 8;
         digest.update((byte) (len >> 8 & 0xFF));
         digest.update((byte) (len & 0xFF));
         digest.update(ID, 0, ID.length);
-        digest.update(asUnsignedByteArray(sm2p256v1.getCurve().getA().toBigInteger()), 0, 32);
-        digest.update(asUnsignedByteArray(sm2p256v1.getCurve().getB().toBigInteger()), 0, 32);
-        digest.update(asUnsignedByteArray(g.getAffineXCoord().toBigInteger()), 0, 32);
-        digest.update(asUnsignedByteArray(g.getAffineYCoord().toBigInteger()), 0, 32);
-        digest.update(asUnsignedByteArray(Ax), 0, 32);
-        digest.update(asUnsignedByteArray(Ay), 0, 32);
+        digest.update(asUnsignedByteArray(sm2p256v1.getCurve().getA().toBigInteger()), 0, BIG_INTEGER_PADDING);
+        digest.update(asUnsignedByteArray(sm2p256v1.getCurve().getB().toBigInteger()), 0, BIG_INTEGER_PADDING);
+        digest.update(asUnsignedByteArray(g.getAffineXCoord().toBigInteger()), 0, BIG_INTEGER_PADDING);
+        digest.update(asUnsignedByteArray(g.getAffineYCoord().toBigInteger()), 0, BIG_INTEGER_PADDING);
+        digest.update(asUnsignedByteArray(takeVerifyKey().getQ().getAffineXCoord().toBigInteger()), 0, BIG_INTEGER_PADDING);
+        digest.update(asUnsignedByteArray(takeVerifyKey().getQ().getAffineYCoord().toBigInteger()), 0, BIG_INTEGER_PADDING);
 
         return hashDoFinal(digest);
     }
@@ -78,18 +79,18 @@ public class DuplicateSignDigest {
         private final BigInteger k;
         private final ECPoint[] randomBind;
 
-        public Session(BigInteger k) {
+        private Session(BigInteger k) {
             this.k = k;
             this.randomBind = new ECPoint[2];
             randomBind[0] = ECAlgorithms.referenceMultiply(g, k).normalize();
             randomBind[1] = ECAlgorithms.referenceMultiply(b, k).normalize();
         }
 
-        public byte[] buildSignApply(byte[] msg) {
+        public byte[] build(byte[] msg) {
             return encodeRandomBindMsg(randomBind, msg);
         }
 
-        public byte[] signApply(byte[] comMsg) {
+        public byte[] apply(byte[] comMsg) {
             RandomBindMsg msg = decodeRandomBindMsg(comMsg);
             verifyRandomBind(msg.ps);
             BigInteger r = getR(randomBind[0], msg.ps[1], msg.msg);
@@ -98,17 +99,34 @@ public class DuplicateSignDigest {
             return encodeRandomBindMsg(randomBind, rs_);
         }
 
-        public byte[] buildSignRequest(byte[] digits) {
+        public byte[] sign(byte[] digits) throws IOException {
             RandomBindMsg msg = decodeRandomBindMsg(digits);
             verifyRandomBind(msg.ps);
             BigInteger[] rs_ = decodePointNum(msg.msg, 0);
-            return encodePointNum(rs_[0], getT(rs_[1]));
+            BigInteger t = getT(rs_[1]);
+            BigInteger s = getS(rs_[0], t);
+            return toSign(rs_[0], s);
         }
 
-        public byte[] sign(byte[] digits) throws IOException {
-            BigInteger[] rt = decodePointNum(digits, 0);
-            BigInteger s = getS(rt[0], rt[1]);
-            return toSign(rt[0], s);
+        public byte[] getRandomBind() {
+            return encodeRandomBindMsg(randomBind, new byte[0]);
+        }
+
+        public byte[] apply(byte[] rb, byte[] msg) {
+            RandomBindMsg rbm = decodeRandomBindMsg(rb);
+            BigInteger r = getR(randomBind[0], rbm.ps[1], msg);
+            return asUnsignedByteArray(getS_(r));
+        }
+
+        public byte[] sign(byte[] rb, byte[] s_, byte[] msg) throws IOException {
+            BigInteger bS_ = new BigInteger(1, s_);
+            RandomBindMsg rbm = decodeRandomBindMsg(rb);
+            BigInteger r = getR(randomBind[1], rbm.ps[0], msg);
+            return toSign(r, getS(r, getT(bS_)));
+        }
+
+        public void verifyRandomBind(byte[] rb) {
+            verifyRandomBind(decodeRandomBindMsg(rb).ps);
         }
 
         private void verifyRandomBind(ECPoint[] rb) {
@@ -119,9 +137,8 @@ public class DuplicateSignDigest {
 
         private BigInteger getR(ECPoint ra, ECPoint rb, byte[] message) {
             ECPoint R = ECAlgorithms.sumOfTwoMultiplies(ra, BigInteger.ONE, rb, BigInteger.ONE).normalize();
-            ECPoint C = takeVerifyKey().getQ();
             SM3Digest digest = new SM3Digest();
-            updateDigest(digest, getZ(C.getAffineXCoord().toBigInteger(), C.getAffineYCoord().toBigInteger()));
+            updateDigest(digest, getZ());
             updateDigest(digest, message);
             return new BigInteger(1, hashDoFinal(digest)).add(R.getAffineXCoord().toBigInteger()).mod(n);
         }
@@ -152,19 +169,19 @@ public class DuplicateSignDigest {
 
 
     private static byte[] encodeRandomBindMsg(ECPoint[] r, byte[] msg) {
-        byte[] data = new byte[128 + msg.length];
-        System.arraycopy(encodePointNum(r[0].getAffineXCoord().toBigInteger(), r[0].getAffineYCoord().toBigInteger()), 0, data, 0, 64);
-        System.arraycopy(encodePointNum(r[1].getAffineXCoord().toBigInteger(), r[1].getAffineYCoord().toBigInteger()), 0, data, 64, 64);
-        System.arraycopy(msg, 0, data, 128, msg.length);
+        byte[] data = new byte[BIG_INTEGER_PADDING * 4 + msg.length];
+        System.arraycopy(encodePointNum(r[0].getAffineXCoord().toBigInteger(), r[0].getAffineYCoord().toBigInteger()), 0, data, 0, BIG_INTEGER_PADDING * 2);
+        System.arraycopy(encodePointNum(r[1].getAffineXCoord().toBigInteger(), r[1].getAffineYCoord().toBigInteger()), 0, data, BIG_INTEGER_PADDING * 2, BIG_INTEGER_PADDING * 2);
+        System.arraycopy(msg, 0, data, BIG_INTEGER_PADDING * 4, msg.length);
         return data;
     }
 
     private static RandomBindMsg decodeRandomBindMsg(byte[] data) {
-        byte[] msg = new byte[data.length - 32 * 4];
-        System.arraycopy(data, 32 * 4, msg, 0, msg.length);
+        byte[] msg = new byte[data.length - BIG_INTEGER_PADDING * 4];
+        System.arraycopy(data, BIG_INTEGER_PADDING * 4, msg, 0, msg.length);
 
         BigInteger[] b1 = decodePointNum(data, 0);
-        BigInteger[] b2 = decodePointNum(data, 64);
+        BigInteger[] b2 = decodePointNum(data, BIG_INTEGER_PADDING * 2);
 
         ECPoint p1 = sm2p256v1.getCurve().createPoint(b1[0], b1[1]);
         ECPoint p2 = sm2p256v1.getCurve().createPoint(b2[0], b2[1]);
@@ -172,17 +189,17 @@ public class DuplicateSignDigest {
     }
 
     private static BigInteger[] decodePointNum(byte[] data, int pos) {
-        byte[] x = new byte[32];
-        byte[] y = new byte[32];
-        System.arraycopy(data, pos, x, 0, 32);
-        System.arraycopy(data, pos + 32, y, 0, 32);
+        byte[] x = new byte[BIG_INTEGER_PADDING];
+        byte[] y = new byte[BIG_INTEGER_PADDING];
+        System.arraycopy(data, pos, x, 0, BIG_INTEGER_PADDING);
+        System.arraycopy(data, pos + BIG_INTEGER_PADDING, y, 0, BIG_INTEGER_PADDING);
         return new BigInteger[]{new BigInteger(1, x), new BigInteger(1, y)};
     }
 
     private static byte[] encodePointNum(BigInteger x, BigInteger y) {
-        byte[] data = new byte[64];
-        System.arraycopy(asUnsignedByteArray(x), 0, data, 0, 32);
-        System.arraycopy(asUnsignedByteArray(y), 0, data, 32, 32);
+        byte[] data = new byte[BIG_INTEGER_PADDING * 2];
+        System.arraycopy(asUnsignedByteArray(x), 0, data, 0, BIG_INTEGER_PADDING);
+        System.arraycopy(asUnsignedByteArray(y), 0, data, BIG_INTEGER_PADDING * 1, BIG_INTEGER_PADDING);
         return data;
     }
 
@@ -195,7 +212,7 @@ public class DuplicateSignDigest {
     }
 
     private static byte[] asUnsignedByteArray(BigInteger n) {
-        return BigIntegers.asUnsignedByteArray(32, n);
+        return BigIntegers.asUnsignedByteArray(BIG_INTEGER_PADDING, n);
     }
 
     private static byte[] hashDoFinal(SM3Digest digest) {
