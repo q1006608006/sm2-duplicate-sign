@@ -69,7 +69,7 @@ sign = s1.sign(rb2, s_, msg);
 ```
 
 ### 验签：
-（常用的SM2验签即可，标准见《SM2椭圆曲线公钥密码算法 - 第2部分:数字签名算法》）
+（常用的SM2验签即可，标准见国密局发布的《SM2椭圆曲线公钥密码算法 - 第2部分:数字签名算法》）
 ```java
 //PublicKey validKey; //见【获取验签公钥】
 boolean result = Sm2Utils.verify(msg, sign, validKey.getEncoded());
