@@ -12,7 +12,7 @@
 * org.bouncycastle:bcprov-jdk15on >= 1.64(优先选择最新版本)
 
 ## 使用方法
-### 前提：参与双方各自拥有一对SM2密钥对
+### 前提：参与双方各自拥有一套SM2密钥对
 ```java
 //init key
 KeyPair kp1 = Sm2Utils.generate();
@@ -67,6 +67,7 @@ byte[] s_ = s2.apply(rb1, msg);
 //6.请求方基于s_构建签名(r,s)，其中入参rb2,msg为已知信息
 sign = s1.sign(rb2, s_, msg);
 ```
+
 ### 验签：
 ```java
 //PublicKey validKey; //见【获取验签公钥】
