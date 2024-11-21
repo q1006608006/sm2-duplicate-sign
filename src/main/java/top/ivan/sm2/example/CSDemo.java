@@ -43,10 +43,12 @@ public class CSDemo {
 
             DuplicateSignDigest.Session session = digest.startSession();
             String uid = UUID.randomUUID().toString();
-            byte[] comMsg = session.build(message);
-            byte[] reply = rpc.apply(token, uid, comMsg);
+            byte[] ra = session.getRandomBind();
+            byte[] rb = rpc.getRandom(token, uid, ra);
+            byte[] s_ = session.buildS_(rb, message);
+            byte[] t = rpc.apply(token, uid, s_);
             try {
-                return session.sign(reply);
+                return session.sign(t);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -75,10 +77,12 @@ public class CSDemo {
          *
          * @param id     cli-id
          * @param uid    random-id
-         * @param comMsg cli-info & sign-message
+         * @param s_ cli-info & sign-message
          * @return apply info
          */
-        byte[] apply(String id, String uid, byte[] comMsg);
+        byte[] apply(String id, String uid, byte[] s_);
+
+        byte[] getRandom(String clientId, String uid, byte[] ra);
 
         /**
          * get the key for valid duplicate-sign
@@ -110,21 +114,33 @@ public class CSDemo {
         }
 
         @Override
-        public byte[] apply(String id, String uid, byte[] comMsg) {
-            Processor processor;
-            if (verifyExpire(id) || (processor = processorMap.get(id)) == null) {
-                //do something
-                throw new RuntimeException("expired");
-            }
-
-            DuplicateSignDigest.Session session = processor.newSession();
-            return session.apply(comMsg);
+        public byte[] apply(String id, String uid, byte[] s_) {
+            Processor processor = getProcessor(id);
+            DuplicateSignDigest.Session session = processor.getSession(uid);
+            return session.getT(s_);
         }
 
+        @Override
+        public byte[] getRandom(String clientId, String uid, byte[] ra) {
+            Processor processor = getProcessor(clientId);
+            DuplicateSignDigest.Session session = processor.getSession(uid);
+            session.verifyRandomBind(ra);
+            return session.getRandomBind();
+        }
 
         @Override
         public BCECPublicKey getVerifyKey(BCECPublicKey trd) {
             return new DuplicateSignDigest(privateKey, trd).takeVerifyKey();
+        }
+
+        private Processor getProcessor(String id) {
+            Processor processor;
+
+            if (verifyExpire(id) || (processor = processorMap.get(id)) == null) {
+                //do something
+                throw new RuntimeException("expired");
+            }
+            return processor;
         }
 
         private static class Processor {
@@ -142,8 +158,18 @@ public class CSDemo {
                 };
             }
 
-            public DuplicateSignDigest.Session newSession() {
-                return digest.startSession();
+            public DuplicateSignDigest.Session getSession(String uid) {
+                if (sessionMap.containsKey(uid)) {
+                    return sessionMap.get(uid);
+                } else {
+                    DuplicateSignDigest.Session session = digest.startSession();
+                    sessionMap.put(uid, session);
+                    return session;
+                }
+            }
+
+            public void closeSession(String uid) {
+                sessionMap.remove(uid);
             }
         }
     }
@@ -210,7 +236,7 @@ public class CSDemo {
         BCECPublicKey verifyKeyFromCli = new DuplicateSignDigest(cli.privateKey, srv.getPublicKey()).takeVerifyKey();
 
         System.out.println("cli's verifyKey: " + Base64.getEncoder().encodeToString(verifyKeyFromCli.getEncoded()));
-        System.out.println("is same object\t? " + (verifyKeyFromCli == validKey));
+        System.out.println("is same java object\t? " + (verifyKeyFromCli == validKey));
         System.out.println("is same key\t\t? " + verifyKeyFromCli.equals(validKey));
     }
 }

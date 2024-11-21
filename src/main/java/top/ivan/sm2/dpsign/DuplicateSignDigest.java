@@ -78,6 +78,7 @@ public class DuplicateSignDigest {
     public class Session {
         private final BigInteger k;
         private final ECPoint[] randomBind;
+        private BigInteger r;
 
         private Session(BigInteger k) {
             this.k = k;
@@ -86,43 +87,27 @@ public class DuplicateSignDigest {
             randomBind[1] = ECAlgorithms.referenceMultiply(b, k).normalize();
         }
 
-        public byte[] build(byte[] msg) {
-            return encodeRandomBindMsg(randomBind, msg);
+        public byte[] buildS_(byte[] rb, byte[] msg) {
+            verifyRandomBind(rb);
+            RandomBindMsg rbm = decodeRandomBindMsg(rb);
+
+            this.r = getR(randomBind[0], rbm.ps[1], msg);
+            BigInteger s_ = getS_();
+
+            return asUnsignedByteArray(s_);
         }
 
-        public byte[] apply(byte[] comMsg) {
-            RandomBindMsg msg = decodeRandomBindMsg(comMsg);
-            verifyRandomBind(msg.ps);
-            BigInteger r = getR(randomBind[0], msg.ps[1], msg.msg);
-            BigInteger s_ = getS_(r);
-            byte[] rs_ = encodePointNum(r, s_);
-            return encodeRandomBindMsg(randomBind, rs_);
+        public byte[] getT(byte[] s_) {
+            return asUnsignedByteArray(getT(fromUnsignedByteArray(s_)));
         }
 
-        public byte[] sign(byte[] digits) throws IOException {
-            RandomBindMsg msg = decodeRandomBindMsg(digits);
-            verifyRandomBind(msg.ps);
-            BigInteger[] rs_ = decodePointNum(msg.msg, 0);
-            BigInteger t = getT(rs_[1]);
-            BigInteger s = getS(rs_[0], t);
-            return toSign(rs_[0], s);
+        public byte[] sign(byte[] t) throws IOException {
+            return toSign(r, getS(r, fromUnsignedByteArray(t)));
         }
+
 
         public byte[] getRandomBind() {
             return encodeRandomBindMsg(randomBind, new byte[0]);
-        }
-
-        public byte[] apply(byte[] rb, byte[] msg) {
-            RandomBindMsg rbm = decodeRandomBindMsg(rb);
-            BigInteger r = getR(randomBind[0], rbm.ps[1], msg);
-            return asUnsignedByteArray(getS_(r));
-        }
-
-        public byte[] sign(byte[] rb, byte[] s_, byte[] msg) throws IOException {
-            BigInteger bS_ = new BigInteger(1, s_);
-            RandomBindMsg rbm = decodeRandomBindMsg(rb);
-            BigInteger r = getR(randomBind[1], rbm.ps[0], msg);
-            return toSign(r, getS(r, getT(bS_)));
         }
 
         public void verifyRandomBind(byte[] rb) {
@@ -143,7 +128,7 @@ public class DuplicateSignDigest {
             return new BigInteger(1, hashDoFinal(digest)).add(R.getAffineXCoord().toBigInteger()).mod(n);
         }
 
-        private BigInteger getS_(BigInteger r) {
+        private BigInteger getS_() {
             return k.add(r).mod(n).multiply(d.modInverse(n)).mod(n);
         }
 
@@ -213,6 +198,10 @@ public class DuplicateSignDigest {
 
     private static byte[] asUnsignedByteArray(BigInteger n) {
         return BigIntegers.asUnsignedByteArray(BIG_INTEGER_PADDING, n);
+    }
+
+    private static BigInteger fromUnsignedByteArray(byte[] array) {
+        return new BigInteger(1, array);
     }
 
     private static byte[] hashDoFinal(SM3Digest digest) {
