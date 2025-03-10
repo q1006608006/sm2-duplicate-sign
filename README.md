@@ -41,11 +41,9 @@ DuplicateSignDigest.Session s1 = digest1.startSession();
 //DuplicateSignDigest.Session s2;
 ```
 
-### 签名 ：该工具提供两种签名模式，分别为快速模式及复杂模式
-*
-```java
+### 签名
+* 见Demo
 
-```
 ### 验签：
 （常用的SM2验签即可，标准见国密局发布的《SM2椭圆曲线公钥密码算法 - 第2部分:数字签名算法》）
 ```java
