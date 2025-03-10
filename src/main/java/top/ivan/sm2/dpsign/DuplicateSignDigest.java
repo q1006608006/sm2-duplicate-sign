@@ -77,21 +77,21 @@ public class DuplicateSignDigest {
 
     public class Session {
         private final BigInteger k;
-        private final ECPoint[] randomBind;
+        private final ECPoint[] RAndR_;
         private BigInteger r;
 
         private Session(BigInteger k) {
             this.k = k;
-            this.randomBind = new ECPoint[2];
-            randomBind[0] = ECAlgorithms.referenceMultiply(g, k).normalize();
-            randomBind[1] = ECAlgorithms.referenceMultiply(b, k).normalize();
+            this.RAndR_ = new ECPoint[2];
+            RAndR_[0] = ECAlgorithms.referenceMultiply(g, k).normalize();
+            RAndR_[1] = ECAlgorithms.referenceMultiply(b, k).normalize();
         }
 
         public byte[] buildS_(byte[] rb, byte[] msg) {
-            verifyRandomBind(rb);
-            RandomBindMsg rbm = decodeRandomBindMsg(rb);
+            verifyRR_(rb);
+            ECPoint[] RbRb_ = decodeRAndR_(rb);
 
-            this.r = getR(randomBind[0], rbm.ps[1], msg);
+            this.r = getR(RAndR_[0], RbRb_[1], msg);
             BigInteger s_ = getS_();
 
             return asUnsignedByteArray(s_);
@@ -106,15 +106,21 @@ public class DuplicateSignDigest {
         }
 
 
-        public byte[] getRandomBind() {
-            return encodeRandomBindMsg(randomBind, new byte[0]);
+        public byte[] getRR_() {
+            byte[] data = new byte[BIG_INTEGER_PADDING * 4];
+            System.arraycopy(encodePointNum(RAndR_[0].getAffineXCoord().toBigInteger(), RAndR_[0].getAffineYCoord().toBigInteger()), 0, data, 0, BIG_INTEGER_PADDING * 2);
+            System.arraycopy(encodePointNum(RAndR_[1].getAffineXCoord().toBigInteger(), RAndR_[1].getAffineYCoord().toBigInteger()), 0, data, BIG_INTEGER_PADDING * 2, BIG_INTEGER_PADDING * 2);
+            return data;
         }
 
-        public void verifyRandomBind(byte[] rb) {
-            verifyRandomBind(decodeRandomBindMsg(rb).ps);
+        public void verifyRR_(byte[] rb) {
+            ECPoint[] ps = decodeRAndR_(rb);
+            if (!ps[1].equals(ECAlgorithms.referenceMultiply(ps[0], d))) {
+                throw new RuntimeException("unknown caller");
+            }
         }
 
-        private void verifyRandomBind(ECPoint[] rb) {
+        private void verifyRR_(ECPoint[] rb) {
             if (!rb[1].equals(ECAlgorithms.referenceMultiply(rb[0], d))) {
                 throw new RuntimeException("unknown caller");
             }
@@ -142,35 +148,14 @@ public class DuplicateSignDigest {
 
     }
 
-    private static class RandomBindMsg {
-        public ECPoint[] ps;
-        public byte[] msg;
-
-        public RandomBindMsg(ECPoint[] ps, byte[] msg) {
-            this.ps = ps;
-            this.msg = msg;
-        }
-    }
-
-
-    private static byte[] encodeRandomBindMsg(ECPoint[] r, byte[] msg) {
-        byte[] data = new byte[BIG_INTEGER_PADDING * 4 + msg.length];
-        System.arraycopy(encodePointNum(r[0].getAffineXCoord().toBigInteger(), r[0].getAffineYCoord().toBigInteger()), 0, data, 0, BIG_INTEGER_PADDING * 2);
-        System.arraycopy(encodePointNum(r[1].getAffineXCoord().toBigInteger(), r[1].getAffineYCoord().toBigInteger()), 0, data, BIG_INTEGER_PADDING * 2, BIG_INTEGER_PADDING * 2);
-        System.arraycopy(msg, 0, data, BIG_INTEGER_PADDING * 4, msg.length);
-        return data;
-    }
-
-    private static RandomBindMsg decodeRandomBindMsg(byte[] data) {
-        byte[] msg = new byte[data.length - BIG_INTEGER_PADDING * 4];
-        System.arraycopy(data, BIG_INTEGER_PADDING * 4, msg, 0, msg.length);
-
+    private static ECPoint[] decodeRAndR_(byte[] data) {
         BigInteger[] b1 = decodePointNum(data, 0);
         BigInteger[] b2 = decodePointNum(data, BIG_INTEGER_PADDING * 2);
 
         ECPoint p1 = sm2p256v1.getCurve().createPoint(b1[0], b1[1]);
         ECPoint p2 = sm2p256v1.getCurve().createPoint(b2[0], b2[1]);
-        return new RandomBindMsg(new ECPoint[]{p1, p2}, msg);
+
+        return new ECPoint[]{p1,p2};
     }
 
     private static BigInteger[] decodePointNum(byte[] data, int pos) {

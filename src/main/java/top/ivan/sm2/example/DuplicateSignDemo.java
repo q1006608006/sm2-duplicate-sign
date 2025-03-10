@@ -38,12 +38,12 @@ public class DuplicateSignDemo {
             this.session = digest.startSession();
         }
 
-        public byte[] getRAndR_() {
-            return session.getRandomBind();
+        public byte[] getRR_() {
+            return session.getRR_();
         }
 
-        public void validRAndR_(byte[] data) {
-            session.verifyRandomBind(data);
+        public void verifyRR_(byte[] data) {
+            session.verifyRR_(data);
         }
 
         public byte[] getS_(byte[] RAndR_, byte[] message) {
@@ -90,17 +90,17 @@ public class DuplicateSignDemo {
 
         //1、Alice
         //生成RA和RA'
-        byte[] RARA_ = Alice.getRAndR_();
+        byte[] RARA_ = Alice.getRR_();
 
         //2、Bob
         //验证RA=dB*RA'
-        Bob.validRAndR_(RARA_);
+        Bob.verifyRR_(RARA_);
         //生成RB和RB'
-        byte[] RBRB_ = Bob.getRAndR_();
+        byte[] RBRB_ = Bob.getRR_();
 
         //3、Alice
         //验证RB=dA*RB'
-        Alice.validRAndR_(RBRB_);
+        Alice.verifyRR_(RBRB_);
         //计算R',ZA,r,返回s'
         byte[] s_ = Alice.getS_(RBRB_, message);
 
@@ -113,13 +113,13 @@ public class DuplicateSignDemo {
         byte[] sign = Alice.sign(t);
 
         //验签并输出结果（注意，如果生成签名的用户（Alice）带有ID，这里的验签ID必须使用该用户ID）
-        boolean AliceVerifyResult = BCSm2Utils.verify(message, sign, AliceVerifyKey.getEncoded(), ID);
+        boolean AliceVerifyResult = BCSm2Utils.verifyWithX509(message, sign, AliceVerifyKey.getEncoded(), ID);
         System.out.println("使用Alice关联Bob的验签公钥验签结果：" + AliceVerifyResult);
 
-        boolean BobVerifyResult = BCSm2Utils.verify(message, sign, BobVerifyKey.getEncoded(), ID);
+        boolean BobVerifyResult = BCSm2Utils.verifyWithX509(message, sign, BobVerifyKey.getEncoded(), ID);
         System.out.println("使用Bob关联Alice的验签公钥验签结果：" + BobVerifyResult);
 
-        boolean unknownSourceResult = BCSm2Utils.verify(message, sign, AliceKeyPair.getPublic().getEncoded(), ID);
+        boolean unknownSourceResult = BCSm2Utils.verifyWithX509(message, sign, AliceKeyPair.getPublic().getEncoded(), ID);
         System.out.println("使用未关联的公钥验签结果：" + unknownSourceResult);
     }
 

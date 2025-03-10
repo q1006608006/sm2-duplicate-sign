@@ -43,7 +43,7 @@ public class CSDemo {
 
             DuplicateSignDigest.Session session = digest.startSession();
             String uid = UUID.randomUUID().toString();
-            byte[] ra = session.getRandomBind();
+            byte[] ra = session.getRR_();
             byte[] rb = rpc.getRandom(token, uid, ra);
             byte[] s_ = session.buildS_(rb, message);
             byte[] t = rpc.apply(token, uid, s_);
@@ -124,8 +124,8 @@ public class CSDemo {
         public byte[] getRandom(String clientId, String uid, byte[] ra) {
             Processor processor = getProcessor(clientId);
             DuplicateSignDigest.Session session = processor.getSession(uid);
-            session.verifyRandomBind(ra);
-            return session.getRandomBind();
+            session.verifyRR_(ra);
+            return session.getRR_();
         }
 
         @Override

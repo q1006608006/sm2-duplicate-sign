@@ -42,43 +42,22 @@ DuplicateSignDigest.Session s1 = digest1.startSession();
 ```
 
 ### 签名 ：该工具提供两种签名模式，分别为快速模式及复杂模式
-* 快速模式（一次rpc，调整了验证rb的顺序，安全性较弱）
+*
 ```java
-//1.发起方构建协同签名请求，该请求包含随机要素(rb)及待签名消息(msg)
-byte[] apply = s1.build(msg);
-//2.参与方参与计算并返回(rb,r,s_)
-byte[] reply = s2.apply(apply);
-//3.发起方基于参与方返回结果构建签名(r,s)
-byte[] sign = s1.sign(reply);
-```
-* 复杂模式（两次rpc或更多）
-```java
-//1.请求方展示随机要素rb
-byte[] rb1 = s1.getRandomBind();
-//2.参与方验证请求方rb
-s2.verifyRandomBind(rb1);
-//3.验证通过后参与方展示其rb
-byte[] rb2 = s2.getRandomBind();
-//4.请求方验证参与方rb
-s1.verifyRandomBind(rb2);
 
-//5.验证通过后请求方发起签名请求,消息包含(rb,msg)，参与方返回要素s_
-byte[] s_ = s2.apply(rb1, msg);
-//6.请求方基于s_构建签名(r,s)，其中入参rb2,msg为已知信息
-sign = s1.sign(rb2, s_, msg);
 ```
-
 ### 验签：
 （常用的SM2验签即可，标准见国密局发布的《SM2椭圆曲线公钥密码算法 - 第2部分:数字签名算法》）
 ```java
 //PublicKey validKey; //见【获取验签公钥】
 boolean result = Sm2Utils.verify(msg, sign, validKey.getEncoded());
+//BCSm2Utils.verify(data, sign, pubKey, id)适用于指定了签名者的ID
 System.out.println("验签结果：" + result);
 ```
 
 ## 示例
 在top.ivan.sm2.example包下提供了两个Demo:
-* DuplicateSignDemo: Digest示例代码
+* DuplicateSignDemo: 完整签名步骤演示
 * CSDemo: 模拟了签名发起方与参与方，通过RPC调用完成协同签名的过程
 
 
